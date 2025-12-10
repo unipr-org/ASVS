@@ -1,0 +1,173 @@
+\section{Widening}
+
+Nei domini astratti con catene ascendenti infinite, l'iterazione standard
+per il calcolo del punto fisso potrebbe non terminare.
+L'operatore di widening ($\nabla$) è una tecnica fondamentale per garantire
+la convergenza dell'analisi in un numero finito di passi, forzando una
+stabilizzazione della sequenza di iterati.
+
+\subsection{Definizione dell'operatore di widening}
+
+\begin{definizione}{Operatore di widening}{widening_operator}
+Un operatore binario $\nabla: A \times A \to A$ è un operatore di widening
+su un dominio astratto $A$ (che è un join-semilattice) se soddisfa due
+proprietà fondamentali:
+
+\begin{itemize}
+    \item \textbf{Upper bound (Sovra-approssimazione)}:
+    \[
+    \forall x,y \in A : x \sqsubseteq x \nabla y \quad \text{e} \quad y \sqsubseteq x \nabla y
+    \]
+    Il risultato deve essere un upper bound di entrambi gli operandi (quindi
+    anche della loro unione $x \sqcup y$).
+
+    \item \textbf{Convergenza}:
+    Per ogni catena ascendente $(y_i)_{i \in \mathbb{N}}$ in $A$, la
+    sequenza $(x_i)_{i \in \mathbb{N}}$ definita come:
+    \[
+    x_0 = y_0, \quad x_{i+1} = x_i \nabla y_{i+1}
+    \]
+    si stabilizza in un tempo finito.
+    Ovvero $\exists k \ge 0$ tale che $x_{k+1} = x_k$.
+\end{itemize}
+\end{definizione}
+
+\begin{esempio}{Widening su intervalli}{interval_widening}
+Nel dominio degli intervalli, l'operatore di widening (\Cref{def:widening_operator})
+è progettato per proiettare all'infinito gli estremi che risultano instabili
+(che crescono) tra un'iterazione e l'altra.
+
+Dati due intervalli $I_1 = [a, b]$ e $I_2 = [c, d]$ tali che $I_1
+\sqsubseteq I_2$, il widening è definito come:
+\[
+[a, b] \nabla [c, d] =
+\left[
+    \begin{cases} a & \text{se } a \le c \\ -\infty & \text{altrimenti} \end{cases},
+    \begin{cases} b & \text{se } b \ge d \\ +\infty & \text{altrimenti} \end{cases}
+\right]
+\]
+Se un estremo è stabile (es. $a \le c$ per il limite inferiore), viene
+mantenuto.
+Se invece l'estremo si sta ``allargando'' ($a > c$), il widening lo forza
+immediatamente a $-\infty$ (o $+\infty$ per il limite superiore) per garantire
+che smetta di cambiare.
+
+Proprietà:
+\begin{itemize}
+    \item \textbf{Non commutativo}:
+    $[2,3] \nabla [1,4] = [-\infty, +\infty] \neq [1,4] \nabla [2,3]$.
+    \item \textbf{Non monotono}: Può accadere che pur avendo input più
+    precisi, il risultato del widening sia meno preciso.
+\end{itemize}
+
+\end{esempio}
+
+\subsection{Strategie di applicazione}
+
+L'applicazione indiscriminata del widening a tutte le equazioni porterebbe a
+una grossolana sovra-approssimazione.
+Secondo Bourdoncle, è sufficiente applicare il widening solo in un insieme di
+punti che interrompono ogni ciclo nel grafo delle dipendenze (feedback vertex
+set), tipicamente le intestazioni dei cicli (loop headers).
+
+Il sistema di equazioni astratto diventa quindi:
+\[
+x_i =
+\begin{cases}
+    x_i \nabla f_i^\#(x_1, \dots, x_m) & \text{se } i \in WP \text{ (Widening Points)} \\
+    x_i \sqcup f_i^\#(x_1, \dots, x_m) & \text{altrimenti}
+\end{cases}
+\]
+
+\section{Narrowing}
+
+L'utilizzo del widening garantisce la convergenza ma introduce una perdita di
+precisione significativa (spesso introducendo valori $\pm \infty$).
+Il risultato ottenuto è un post-punto fisso ($postfp(f)$), tale che
+$F^\#(x) \sqsubseteq x$.
+L'operatore di \textbf{narrowing} ($\triangle$) permette di raffinare questo
+risultato recuperando precisione.
+
+\begin{definizione}{Operatore di Narrowing}{narrowing_def}
+Un operatore binario $\triangle: A \times A \to A$ è un operatore di narrowing
+se soddisfa le seguenti proprietà:
+
+\begin{itemize}
+    \item \textbf{Raffinamento limitato}:
+    \[
+    \forall x,y \in A : x \sqcap y \sqsubseteq x \triangle y \sqsubseteq x
+    \]
+    Il risultato deve essere contenuto nel primo operando $x$ (migliorando la
+    precisione) ma deve comunque contenere l'intersezione reale $x \sqcap y$
+    (per mantenere la soundness).
+
+    \item \textbf{Convergenza}:
+    Per ogni sequenza $(y_i)_{i \in \mathbb{N}}$, la catena $(x_i)_{i \in \mathbb{N}}$ definita come:
+    \[
+    x_0 = y_0, \quad x_{i+1} = x_i \triangle y_{i+1}
+    \]
+    si stabilizza in un tempo finito.
+\end{itemize}
+\end{definizione}
+
+\begin{esempio}{Narrowing su Intervalli}{interval_narrowing}
+Nel dominio degli intervalli, il narrowing permette di recuperare estremi
+finiti partendo da estremi infiniti generati dal widening, ma solo se il
+nuovo valore calcolato è un miglioramento valido.
+
+\[
+[a, b] \triangle [c, d] =
+\left[
+    \begin{cases} c & \text{se } a = -\infty \\ a & \text{altrimenti} \end{cases},
+    \begin{cases} d & \text{se } b = +\infty \\ b & \text{altrimenti} \end{cases}
+\right]
+\]
+La logica è la seguente:
+\begin{itemize}
+    \item Se il vecchio estremo era infinito ($-\infty$ o $+\infty$) e il
+    nuovo valore proposto è finito, accettiamo il nuovo valore (abbiamo
+    recuperato precisione).
+    \item Se il vecchio estremo era già finito, lo manteniamo inalterato
+    anche se il nuovo valore è ``migliore'' (più stretto).
+    Questo è cruciale per garantire la terminazione ed evitare cicli infiniti
+    di raffinamento.
+\end{itemize}
+\end{esempio}
+
+\subsection{Fasi dell'Analisi}
+
+L'analisi statica completa con domini infiniti si svolge in due fasi sequenziali:
+
+\begin{enumerate}
+    \item \textbf{Ascending Phase (Fase Ascendente)}:
+    Si calcola la sequenza partendo da $\bot$ e utilizzando il widening
+    ($\nabla$) nei punti di widening $WP$. Questa fase termina quando si
+    raggiunge un post-punto fisso $x^\nabla$.
+    \[ x_0 = \bot, \quad x_{i+1} = x_i \nabla F^\#(x_i) \]
+
+    \item \textbf{Descending Phase (Fase Discendente)}:
+    Si parte dal risultato della fase precedente $x^\nabla$ e si utilizza
+    il narrowing ($\triangle$) per raffinare la soluzione.
+    \[ y_0 = x^\nabla, \quad y_{i+1} = y_i \triangle F^\#(y_i) \]
+    Il limite di questa sequenza $x^\triangle$ è un'approssimazione più
+    precisa del least fixpoint reale.
+\end{enumerate}
+
+\begin{nota}{Widening e narrowing}{}
+    
+    \begin{itemize}
+        \item \textbf{Complementarietà}: Widening e Narrowing sono due facce
+        della stessa medaglia.
+        Il primo ``spinge'' verso l'alto per garantire di coprire tutte le
+        soluzioni (anche a costo di esagerare), il secondo ``tira'' verso il
+        basso per eliminare l'eccesso.
+        \item \textbf{Correttezza vs Precisione}: Il widening sacrifica la
+        precisione per la terminazione.
+        Il narrowing tenta di recuperare la precisione persa senza sacrificare
+        nuovamente la terminazione.
+        \item \textbf{Non monotonicità}: È interessante notare come il
+        widening non sia monotono. Questo è controintuitivo rispetto alla
+        maggior parte degli operatori sui reticoli, ma è necessario per
+        ``saltare'' oltre i punti di accumulazione infiniti.
+    \end{itemize}
+\end{nota}

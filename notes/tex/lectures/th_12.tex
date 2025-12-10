@@ -1,0 +1,167 @@
+\section{Domini numerici e interpretazione astratta}
+
+\subsection{Il problema generale}
+
+\begin{nota}{Problemi di affidabilità del software}{}
+L'hardware è diventato milioni di volte più potente rispetto a 25 anni fa, e
+la dimensione dei programmi è cresciuta in modo simile, raggiungendo decine
+di milioni di righe di codice.
+Questi programmi devono essere progettati, sviluppati e mantenuti per lunghi
+periodi (fino a 20 anni e più) a costi ragionevoli.
+
+I team di sviluppo e manutenzione non assistiti non possono far fronte a
+questa esplosione di dimensioni e complessità. Molti software presentano un
+numero di bug a volte difficilmente sopportabile anche nelle applicazioni da
+ufficio.
+Nessuna applicazione critica per la sicurezza può tollerare questo tasso di
+fallimento.
+
+Il problema dell'affidabilità del software è uno dei problemi più importanti
+che l'informatica deve affrontare.
+Questo giustifica il crescente interesse per strumenti meccanici che aiutino
+il programmatore a ragionare sui programmi.
+\end{nota}
+
+\subsection{Esempi di problemi di verifica}
+
+\begin{esempio}{Disastro di Ariane 5}{}
+Il disastro del volo 501 di Ariane 5 è stato causato da un segmento di
+programma che convertiva un numero in virgola mobile in un intero a 16 bit
+con segno.
+Il programma è stato eseguito con un valore di input al di fuori
+dell'intervallo rappresentabile da un intero a 16 bit con segno.
+Questo errore di runtime (overflow), si è verificato sia nei computer attivi
+che in quelli di backup quasi contemporaneamente, ed entrambi i computer si
+sono spenti.
+Ciò ha comportato la perdita totale del controllo dell'assetto. L'Ariane 5
+è diventato incontrollabile e le forze aerodinamiche hanno distrutto il
+veicolo.
+\end{esempio}
+
+\begin{esempio}{Disastri storici}{}
+\begin{itemize}
+    \item Il Mars Climate Orbiter si è disintegrato nell'atmosfera marziana
+    nel 1999 dopo aver mancato l'inserimento in orbita a causa di calcoli
+    incoerenti sulle unità di misura.
+    \item Nello stesso anno, si sospetta che il Mars Polar Lander si sia
+    schiantato su Marte all'atterraggio perché un flag software non è stato
+    resettato correttamente.
+    \item Nella missione dimostrativa tecnologica Mars Pathfinder (MPF) del
+    1997, un giorno di esplorazione è andato perso quando i team di supporto a
+    terra sono stati costretti a riavviare il sistema durante il download dei
+    dati scientifici.
+    \item La missione Mars Exploration Rover (MER) della NASA del 2003
+    comprende due rover. Con un costo di 400 milioni di dollari per ogni
+    rover, un errore di codifica che spegne un rover durante la notte sarebbe
+    a tutti gli effetti un errore da 4,4 milioni di dollari, oltre a una
+    perdita di tempo prezioso di esplorazione sul pianeta.
+\end{itemize}
+\end{esempio}
+
+\begin{esempio}{È ben definito $x/(x-y)$?}{}
+Molte cose possono andare storte:
+\begin{itemize}
+    \item $x$ e/o $y$ potrebbero non essere inizializzati;
+    \item $x-y$ potrebbe andare in overflow;
+    \item $x$ e $y$ potrebbero essere uguali (o $x-y$ potrebbe andare in underflow):
+    divisione per 0;
+    \item $x/(x-y)$ potrebbe andare in overflow (o underflow).
+\end{itemize}
+\end{esempio}
+
+\subsection{Metodi formali di verifica dei programmi}
+
+\begin{definizione}{Scopo della verifica formale}{}
+Lo scopo della verifica formale è dimostrare meccanicamente che tutte le
+possibili esecuzioni di un programma sono corrette in tutti gli ambienti di
+esecuzione specificati.
+\end{definizione}
+
+Esistono diversi metodi di verifica:
+\begin{itemize}
+    \item Metodi deduttivi.
+    \item Model checking.
+    \item Tipizzazione dei programmi.
+    \item Analisi statica.
+\end{itemize}
+
+\begin{nota}{L'indecidibilità sui metodi di verifica}{}
+A causa dell'indecidibilità della verifica dei programmi, tutti i metodi
+sono parziali o incompleti e ricorrono a una qualche forma di
+approssimazione.
+\end{nota}
+
+\subsection{Interpretazione astratta}
+
+\begin{definizione}{Interpretazione astratta}{}
+L'interpretazione astratta è il framework giusto per lavorare con il concetto
+di approssimazione corretta.
+È una teoria per approssimare insiemi e operazioni su insiemi come
+considerato nella teoria degli insiemi (o delle categorie), comprese le
+definizioni induttive.
+È una teoria dell'approssimazione del comportamento dei sistemi discreti
+dinamici.
+La computazione avviene su un dominio di proprietà astratte: il dominio
+astratto, utilizzando operazioni astratte che sono approssimazioni corrette
+delle operazioni concrete.
+La correttezza segue dal progetto.
+
+\end{definizione}
+
+\begin{nota}{Livelli di approssimazione}{}
+
+L'astrazione (approssimazione) può essere abbastanza grossolana da essere
+calcolabile finitamente, ma abbastanza precisa da essere praticamente utile.
+
+\end{nota}
+
+\subsection{Domini astratti numerici}
+
+\begin{definizione}{Domini astratti numerici}{}
+I domini astratti numerici sono utilizzati per rappresentare proprietà
+numeriche delle variabili di un programma.
+Alcuni esempi di domini astratti numerici sono:
+\begin{itemize}
+    \item Segni
+    \item Bounding Boxes
+    \item Congruenze semplici
+    \item Differenze limitate
+    \item Ottagoni
+    \item Poliedri convessi
+    \item Z-Polyhedra
+    \item Congruenze relazionali
+    \item Coni polinomiali
+\end{itemize}
+\end{definizione}
+
+\subsection{Un assaggio di semantica concreta e astratta}
+
+\begin{nota}{Semantica Concreta vs. Astratta}{}
+La semantica concreta descrive l'esatto comportamento di un programma,
+mentre la semantica astratta ne descrive un comportamento approssimato.
+La semantica concreta opera su un dominio concreto (es. $\wp(\mathbb{R}^2)$),
+mentre la semantica astratta opera su un dominio astratto (es. poliedri
+convessi).
+\end{nota}
+
+\begin{esempio}{Semantica concreta}{}
+Considerando il seguente programma:
+\begin{verbatim}
+x := 0; y := 0;
+while x <= 100 do
+    read(b);
+    if b then x := x+2
+    else x := x+1; y := y+1;
+    endif
+endwhile
+\end{verbatim}
+La semantica concreta calcola l'insieme esatto di tutti i possibili valori
+di (x, y) in ogni punto del programma.
+\end{esempio}
+
+\begin{esempio}{Semantica astratta}{}
+La semantica astratta calcola un'approssimazione dell'insieme di tutti i
+possibili valori di (x, y) in ogni punto del programma.
+Per garantire la terminazione, vengono utilizzati operatori di widening per
+accelerare la convergenza del punto fisso.
+\end{esempio}

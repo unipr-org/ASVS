@@ -1,0 +1,183 @@
+\section{Ottimizzazione dell'Analisi Statica: Oracoli per Variabili Non Vincolate}
+
+\subsection{Contesto e abstract compilation}
+
+L'Interpretazione Astratta è una tecnica potente, ma può introdurre
+inefficienze significative, specialmente quando si utilizzano domini astratti
+relazionali complessi.
+Le soluzioni canoniche per migliorare le performance solitamente prevedono
+la scelta di un dominio astratto diverso o di operatori astratti differenti.
+
+Tuttavia, esiste un approccio alternativo chiamato \textbf{Abstract
+compilation}.
+
+\begin{definizione}{Abstract compilation}{abstract_compilation}
+
+Le tecniche di Abstract compilation consistono nel riscrivere la
+rappresentazione intermedia del programma adottata dall'analizzatore.
+L'obiettivo è ottimizzare l'esecuzione astratta modificando il codice su cui
+l'analisi opererà, cercando un trade-off (compromesso) tra accuratezza ed
+efficienza.
+
+\end{definizione}
+
+L'approccio proposto in questa lezione si basa sull'idea che l'efficienza
+del processo di valutazione può essere migliorata propagando non solo
+l'informazione nota, ma anche l'informazione ``sconosciuta''.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_10/01.png}
+    \caption{L'immagine illustra la pipeline dell'analisi statica con
+    oracoli per variabili non vincolate.}
+    \label{fig:th_10_01}
+\end{figure}
+
+
+\subsection{Likely unconstrained variables}
+
+Il concetto chiave è l'identificazione delle likely unconstrained variables
+(LUV), ovvero variabili che molto probabilmente non avranno vincoli
+(saranno $\top$, o $[-\infty, +\infty]$) in un determinato punto del programma.
+
+\begin{esempio}{Propagazione dell'incertezza}{luv_propagation}
+Considerando l'espressione $x = y + expr$.
+
+Sapendo che $y$ è ``unconstrained'' (cioè $y \to [-\infty, +\infty]$) e
+$expr$ ha un valore limitato (es. $[1, 12]$), allora anche il risultato
+$x$ sarà necessariamente $[-\infty, +\infty]$.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/th_10/02.png}
+    \caption{L'immagine illustra la propagazione dell'incertezza attraverso
+    un'operazione aritmetica.}
+    \label{fig:th_10_02}
+\end{figure}
+
+
+Se non si ha alcuna informazione su $y$, è probabile che non si avrà alcuna
+informazione sull'intera espressione. Di conseguenza, c'è poco incentivo a
+fornire una valutazione astratta precisa (e costosa) per quell'espressione,
+poiché il risultato sarà comunque $\top$.
+\end{esempio}
+
+L'obiettivo è identificare queste variabili e propagare questa ``mancanza di
+informazione'' per semplificare l'analisi.
+
+\subsection{La Pipeline di propagazione LUV}
+
+L'approccio si divide in passaggi distinti, che fungono da pre-analisi
+leggera prima dell'analisi target costosa:
+
+\begin{enumerate}
+    \item \textbf{Dataflow analysis}: Identificazione delle
+    variabili LUV tramite euristiche (Oracoli).
+    \item \textbf{Propagation}: Diffusione dell'informazione nel
+    CFG (Esistenziale o Universale).
+    \item \textbf{Program transformation}: Riscrittura del CFG sostituendo
+    le istruzioni complesse con assegnamenti ``havoc''.
+\end{enumerate}
+
+\subsubsection{Oracoli e euristiche}
+
+Poiché determinare esattamente se una variabile sarà $\top$ è costoso quanto
+l'analisi stessa, si utilizzano degli \textbf{oracoli} euristici.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{images/th_10/03.png}
+    \caption{L'immagine illustra le diverse tipologie di oracoli.}
+    \label{fig:th_10_03}
+\end{figure}
+
+Esistono varianti relazionali e non-relazionali.
+
+\begin{definizione}{Oracolo non-relazionale}{non_rel_oracle}
+Un oracolo non-relazionale decide se una variabile è LUV basandosi solo sulle
+proprietà locali dell'assegnamento.
+Ad esempio, per l'operazione $x \leftarrow y \ op \ z$:
+\begin{itemize}
+    \item Se $y$ è LUV o $z$ è LUV, allora $x$ diventa LUV.
+    \item L'oracolo è aggressivo: tende a classificare più variabili come LUV.
+\end{itemize}
+\end{definizione}
+
+\begin{definizione}{Oracolo relazionale}{rel_oracle}
+Un oracolo relazionale cerca di preservare le relazioni tra variabili.
+Ad esempio, per $x \leftarrow y \ op \ z$:
+\begin{itemize}
+    \item Se $op \in \{+, -\}$ e le variabili sono coinvolte, l'oracolo
+    potrebbe decidere di non marcare $x$ come LUV immediatamente, per
+    preservare potenziali vincoli relazionali.
+    \item Questo oracolo è più conservativo (meno falsi positivi, ma meno
+    ottimizzazione).
+\end{itemize}
+\end{definizione}
+
+\begin{nota}{Falsi positivi e negativi}{false_pos_neg}
+\begin{itemize}
+    \item \textbf{Falso positivo (Perdita di precisione)}: L'oracolo dice
+    che $x$ è LUV, ma l'analisi concreta avrebbe trovato un vincolo (es.
+    $x \in [0,0]$).
+    Questo porta a una perdita di precisione nell'analisi finale.
+    \item \textbf{Falso negativo (Mancata ottimizzazione)}: L'oracolo dice
+    che $x$ è vincolata, ma in realtà è $[-\infty, +\infty]$.
+    L'analisi rimane corretta ma non viene ottimizzata.
+\end{itemize}
+Indipendentemente dall'euristica, l'analisi finale è sempre \textbf{sound} (corretta).
+\end{nota}
+
+\subsubsection{Strategie di Propagazione}
+
+Una volta identificate le LUV localmente, l'informazione deve essere
+propagata attraverso i blocchi base del Control Flow Graph (CFG).
+I tipi principali di propagazione sono:
+\begin{itemize}
+    \item \textbf{Propagazione esistenziale ($\exists$)}: Una variabile è nel
+    set LUV all'inizio di un blocco se è LUV lungo \emph{almeno uno} degli
+    archi entranti.
+    \item \textbf{Propagazione universale ($\forall$)}: Una variabile è nel
+    set LUV all'inizio di un blocco se è LUV lungo \emph{tutti} gli archi
+    entranti.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/th_10/04.png}
+    \caption{L'immagine illustra un esempio di propagazione esistenziale e
+    universale.}
+    \label{fig:th_10_04}
+\end{figure}
+
+
+\subsection{Trasformazione del programma (Havoc)}
+
+L'ultimo passo è la trasformazione del codice intermedio (es. CrabIR).
+L'algoritmo prende in input il CFG e la mappa delle variabili LUV post-analisi
+($LU_{post}$).
+Per ogni istruzione $x \leftarrow expr$:
+\begin{itemize}
+    \item Se $x \in LU_{post}$ del blocco corrente, l'istruzione viene
+    sostituita con $x \leftarrow ?$ (dove $?$ rappresenta un valore non
+    deterministico o ``havoc'').
+\end{itemize}
+Questo rimuove il carico computazionale di valutare $expr$ nell'analisi successiva.
+
+
+\subsection{Valutazione sperimentale}
+
+L'approccio è stato implementato e testato su vari benchmark.
+
+L'utilizzo di oracoli per variabili non vincolate ha dimostrato:
+\begin{itemize}
+    \item \textbf{Speedup significativo}: Velocizzazione media
+    di 2.61x utilizzando il dominio dei poliedri, con picchi fino a
+    8.23x.
+    \item \textbf{Precisione}: La perdita di precisione è limitata.
+    Con i poliedri si mantiene circa il 90\% dei vincoli originali
+    (invarianti).
+    \item Le varianti non-relazionali degli oracoli tendono ad essere più
+    aggressive e a garantire maggiori miglioramenti di efficienza rispetto
+    alla scelta tra propagazione esistenziale o universale.
+\end{itemize}

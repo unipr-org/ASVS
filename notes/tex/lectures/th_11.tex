@@ -1,0 +1,303 @@
+\section{Interpretazione Astratta in LiSA}
+
+\subsection{Cos'è LiSA}
+
+\begin{definizione}{LiSA (Library for Static Analysis)}{lisa_def}
+LiSA è una libreria open-source scritta in Java, sviluppata e mantenuta dal
+gruppo di ricerca SSV dell'Università Ca' Foscari di Venezia.
+Il suo scopo è fornire un framework modulare e estensibile per la costruzione
+di analizzatori statici.
+\end{definizione}
+
+I principi fondamentali su cui si basa LiSA sono:
+\begin{itemize}
+    \item Un programma in LiSA è rappresentato come un insieme di control
+    flow graphs (CFGs), più eventuali informazioni ausiliarie.
+    \item I CFG codificano il flusso di controllo nella loro struttura,
+    astraendo dai costrutti sintattici del linguaggio sorgente.
+    \item I nodi del CFG sono specifici del linguaggio, ma vengono riscritti
+    in \textbf{espressioni simboliche} generiche.
+\end{itemize}
+
+\begin{nota}{Espressioni simboliche}{symbolic_expressions}
+    La riscrittura dei CFG in espressioni simboliche generiche permette di
+    separare la sintassi dalla semantica, consentendo ai domini astratti di
+    operare in modo agnostico rispetto al linguaggio.
+\end{nota}
+\subsection{Architettura di LiSA}
+
+L'architettura di LiSA è progettata per essere altamente modulare, separando
+i componenti dell'analisi per massimizzare la riusabilità.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/th_11/01.png}
+    \caption{L'immagine illustra la visione d'insieme dell'architettura di
+    LiSA.}
+    \label{fig:th_11_01}
+\end{figure}
+
+I componenti principali, come mostrato in \Cref{fig:th_11_01}, sono:
+\begin{itemize}
+    \item \textbf{Li front-end}: Traduce il programma sorgente ($P_i$) in una
+    collezione di CFG.
+    \item \textbf{LiSA ``core''}: È il cuore dell'analizzatore e include:
+    \begin{itemize}
+        \item \textbf{CFG fixpoint}: L'engine che implementa l'algoritmo di
+        punto fisso basato su worklist per calcolare la semantica astratta.
+        \item \textbf{Statement semantics}: Logica per tradurre i nodi del
+        CFG in espressioni simboliche.
+        \item \textbf{Domain}: Il dominio astratto che definisce le
+        proprietà da tracciare (es. intervalli, segni).
+        \item \textbf{Memory handling}: Componente che modella la
+        memoria (heap).
+        \item \textbf{Program fixpoint}: Gestisce l'analisi interprocedurale
+        e la risoluzione delle chiamate (call resolution).
+    \end{itemize}
+    \item \textbf{Checks}: Componenti che verificano la presenza di specifici
+    bug o proprietà sui risultati dell'analisi.
+    \item \textbf{Analysis dump}: Produce report e warning per l'utente.
+\end{itemize}
+
+\subsection{Calcolo del punto fisso sul CFG}
+
+L'analisi intra-procedurale in LiSA si basa su un calcolo di punto
+fisso eseguito direttamente sul CFG.
+
+\begin{definizione}{Algoritmo di punto fisso del CFG}{cfg_fixpoint_algo}
+L'algoritmo è basato su un approccio worklist per raggiungere la stabilità.
+Lo pseudocodice è il seguente:
+\begin{verbatim}
+result = {}
+ws = {entry_node}
+while (ws is not empty) do
+    st = ws.pop()
+    in_st = LUB { out_m | m in preds(st) }
+    out_st = semantics(st, in_st)
+    if (not out_st <= result[st]) then
+        if (widening_threshold_reached) then
+            result[st] = result[st] WIDEN out_st
+        else
+            result[st] = result[st] LUB out_st
+        end if
+        ws.push(successors(st))
+    end if
+end while
+\end{verbatim}
+\end{definizione}
+
+\begin{nota}{Componenti dell'algoritmo}{fixpoint_components}
+L'algoritmo si basa su operazioni definite dal dominio astratto, che deve
+essere un reticolo:
+\begin{itemize}
+    \item \textbf{LUB (least upper bound)}: Unisce l'informazione
+    proveniente da più cammini di controllo.
+    \item \textbf{Partial order}: Verifica se un nuovo stato aggiunge
+    informazione rispetto a quello già calcolato, per determinare se la
+    computazione si è stabilizzata.
+    \item \textbf{Widening}: Operatore di allargamento (prossimi capitoli) che
+    garantisce la terminazione dell'analisi su reticoli di altezza infinita,
+    sacrificando la precisione per forzare la convergenza.
+\end{itemize}
+Gli stati calcolati devono quindi essere elementi di un reticolo
+(\Cref{def:lattice}).
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\textwidth]{images/th_11/02.png}
+    \caption{L'immagine illustra le operazioni principali su un reticolo.}
+    \label{fig:th_11_02}
+\end{figure}
+\end{nota}
+
+\subsection{Semantica degli statement}
+
+In LiSA, la semantica di uno statement astrae dalle operazioni concrete e si concentra
+su tre funzionalità principali che un dominio deve supportare.
+
+\begin{definizione}{SemanticDomain}{semantic_domain_def}
+Uno stato astratto in LiSA deve implementare
+l'interfaccia \texttt{SemanticDomain}, che fornisce metodi per:
+\begin{itemize}
+    \item \textbf{assign(id, expr, \ldots)}: Gestisce l'assegnamento di
+    un'espressione a una variabile.
+    \item \textbf{smallStepSemantics(expr, \ldots)}: Valuta un'espressione
+    simbolica.
+    \item \textbf{satisfies(expr, \ldots)}: Verifica se un'espressione è
+    soddisfatta dallo stato astratto.
+    \item \textbf{assume(expr, \ldots)}: Raffina lo stato astratto assumendo
+    che un'espressione sia vera.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_11/03.png}
+    \caption{L'immagine illustra le operazioni principali sul
+    \texttt{SemanticDomain}.}
+    \label{fig:th_11_03}
+\end{figure}
+
+\end{definizione}
+
+\begin{esempio}{Semantica di un condizionale}{cond_semantics_ex}
+La semantica di un'istruzione condizionale \texttt{if (cond) then \ldots}
+viene gestita come segue:
+\begin{verbatim}
+// Calcola lo stato per il ramo "then"
+tbranch = domain.assume(cond).smallStepSemantics(left)
+// Calcola lo stato per il ramo "else"
+fbranch = domain.assume(cond.negate()).smallStepSemantics(right)
+
+// Verifica la soddisfacibilità per potare i rami
+if domain.satisfies(cond) == SATISFIED:
+    return tbranch
+else if domain.satisfies(cond) == NOT_SATISFIED:
+    return fbranch
+else: // Se non so, unisco i risultati
+    return tbranch.lub(fbranch)
+\end{verbatim}
+
+\end{esempio}
+
+\subsection{Gestione della memoria e stato astratto}
+
+Per garantire la modularità, LiSA separa la gestione dei valori dalla
+gestione della memoria.
+
+\subsubsection{Gestione della memoria dinamica}
+
+\begin{nota}{Indipendenza dalla memoria}{memory_independence}
+I domini astratti (es. intervalli, segni) non dovrebbero preoccuparsi di
+come la memoria è organizzata.
+L'idea è trattare ogni locazione di memoria (es. un campo di un oggetto)
+come una ``variabile fittizia'' (fake variable).
+\end{nota}
+
+\begin{esempio}{Accesso a un campo di un oggetto}{field_access_ex}
+    Considerando il seguente frammento di codice che alloca due oggetti:
+\begin{verbatim}
+class A {
+    int f, g;
+}
+x = new A();
+y = new A();
+\end{verbatim}
+L'Heap Domain mappa ogni oggetto e i suoi campi a una locazione di memoria
+concreta, che viene trattata come una variabile fittizia.
+Come mostrato in \ref{fig:th_11_04}, l'oggetto puntato da \texttt{x} si
+trova alla locazione $L_1$, mentre quello puntato da \texttt{y} si trova
+in $L_2$.
+Di conseguenza, l'accesso al campo \texttt{f} di \texttt{x} (\texttt{x.f})
+viene risolto nella variabile fittizia $L_{1.1}$, mentre \texttt{y.f} viene
+risolto in $L_{2.1}$.
+Sarà poi compito del Value Domain associare un valore astratto a queste
+variabili fittizie (es. $L_{1.1} \to [5, 5]$).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_11/04.png}
+    \caption{L'immagine illustra la modellazione della memoria dinamica. Ogni
+    oggetto e campo viene mappato a una locazione di memoria unica.}
+    \label{fig:th_11_04}
+\end{figure}
+
+\end{esempio}
+
+\subsubsection{Lo stato astratto}
+
+Lo stato astratto (\ref{fig:th_11_05}) in LiSA è tipicamente composto da due parti:
+\begin{itemize}
+    \item \textbf{Heap domain}: Si occupa di modellare la memoria.
+    La sua responsabilità è risolvere un'espressione che accede alla memoria
+    (es. \texttt{x.f}) nella corrispondente variabile fittizia che
+    rappresenta quella locazione.
+    \item \textbf{Value domain}: Mappa le variabili (sia quelle dello stack
+    che quelle fittizie dello heap) ai loro valori astratti (es. intervalli,
+    segni).
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\textwidth]{images/th_11/05.png}
+    \caption{L'immagine illustra la composizione dello stato astratto in LiSA.}
+    \label{fig:th_11_05}
+\end{figure}
+
+A seconda della precisione richiesta, l'heap domain può modellare le locazioni
+di memoria in modi diversi (es. context-sensitive, context-insensitive),
+influenzando il trade-off tra precisione e performance.
+
+\subsection{Analisi interprocedurale}
+
+L'analisi interprocedurale gestisce le chiamate a funzione, orchestrando
+le analisi intra-procedurali dei singoli CFG.
+
+\begin{definizione}{Analisi Interprocedurale}{interproc_analysis}
+Questo componente è responsabile di:
+\begin{itemize}
+    \item Analizzare i CFG in isolamento.
+    \item Iniziare l'analisi dal ``main'' e seguire le chiamate a funzione.
+    \item Utilizzare un \textbf{call graph} per risolvere dinamicamente i
+    target di una chiamata (es. in presenza di polimorfismo).
+\end{itemize}
+\end{definizione}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\textwidth]{images/th_11/06.png}
+    \caption{L'immagine illustra l'analisi interprocedurale in LiSA.}
+    \label{fig:th_11_06}
+\end{figure}
+
+
+\subsection{Domini astratti: relazionali e non-relazionali}
+
+I domini di valori si dividono in due categorie principali:
+\begin{itemize}
+    \item \textbf{Domini non-relazionali}: Tracciano i valori di ogni variabile
+    in modo indipendente.
+    \item \textbf{Domini relazionali}: Tracciano le relazioni tra i valori di
+    più variabili.
+\end{itemize}
+
+\subsubsection{Domini non-relazionali}
+
+\begin{definizione}{Dominio non-relazionale}{non_rel_domain}
+Un dominio non-relazionale traccia i valori di ogni variabile in modo
+indipendente, tramite una mappa da identificatori a valori astratti.
+
+In questo tipi di domini la logica di valutazione è specifica per il dominio.
+\end{definizione}
+
+\begin{esempio}{Esempi di domini non-relazionali}{non_rel_domain_ex}
+Alcuni esempi di domini non-relazionali sono:
+\begin{itemize}
+    \item Constant Propagation ($x \to 3$).
+    \item Intervals ($x \to [2, 10]$).
+\end{itemize}
+\end{esempio}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_11/07.png}
+    \caption{L'immagine illustra le classi di domini non-relazionali in LiSA.}
+    \label{fig:th_11_07}
+\end{figure}
+
+
+\subsubsection{Domini relazionali}
+
+\begin{definizione}{Dominio relazionale}{rel_domain}
+Un dominio relazionale traccia le relazioni tra i valori di più variabili.
+\begin{itemize}
+    \item \textbf{Esempi}: Upper bounds ($x > y$), Linear inequalities ($x+y > 10, z < 0$).
+\end{itemize}
+\end{definizione}
+
+
+\begin{esempio}{Esempi di domini relazionali}{rel_domain_ex}
+Alcuni esempi di domini relazionali sono:
+\begin{itemize}
+    \item Upper bounds ($x > y$).
+    \item Linear inequalities ($x+y > 10, z < 0$).
+\end{itemize}
+\end{esempio}

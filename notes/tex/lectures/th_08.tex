@@ -1,0 +1,190 @@
+\section{Introduzione all'interpretazione astratta}
+
+\subsection{Semantica astratta sui CFG}
+
+Mentre nei capitoli precedenti è stata introdotta la semantica
+collettrice sul programma sorgente, per l'analisi statica è più conveniente
+ragionare in termini di CFG.
+In questa rappresentazione, la semantica dei costrutti di controllo come
+\texttt{while} e \texttt{if} è codificata direttamente nella struttura del
+grafo stesso.
+
+Dato il seguente frammento di codice:
+\begin{verbatim}
+1 x = 0;
+2 while ( x < 100 )
+3   if ( x < 50 )
+4       x = x + 2;
+5   else
+6       x = x + 10;
+\end{verbatim}
+
+È possibile costruire il seguente CFG (\cref{fig:th_08_01}):
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_08/01.png}
+    \caption{L'immagine illustra il CFG corrispondente al frammento di codice
+    mostrato.}
+    \label{fig:th_08_01}
+\end{figure}
+Lo scopo è di definire gli stati di ingresso e uscita per ogni nodo del CFG
+utilizzando la semantica astratta.
+
+\begin{definizione}{Entry state}{entry_state}
+
+Per ogni punto del programma (nodo del CFG) $x_i$, lo stato di ingresso
+(\textit{entry}) è definito come il \textit{least upper bound}
+(\Cref{def:upper_bound}) degli stati di uscita dei blocchi che puntano ad
+esso (i predecessori). Per il blocco iniziale, è lo stato di ingresso dato.
+
+\end{definizione}
+
+\begin{definizione}{Exit state}{exit_state}
+
+Per ogni punto del programma (nodo del CFG) $x_i$, lo stato di uscita
+(\textit{exit}) è il risultato dell'applicazione della semantica (concreta o
+astratta) dello statement contenuto nel blocco, applicata allo stato di
+ingresso.
+
+\end{definizione}
+
+Poiché la logica di controllo è gestita dagli archi del grafo, è sufficiente
+esprimere la semantica solo per gli assegnamenti e le espressioni booleane,
+che fungono da ``guardie'' per gli archi.
+
+
+\begin{esempio}{Calcolo degli stati di ingresso}{cfg_entry}
+Prendendo in considerazione il CFG in \Cref{fig:th_08_01}, è possibile costruire
+gli stati di ingresso per ogni blocco come segue:
+\[
+\begin{aligned}
+    x_1 & = I \\
+    x_2 & = [\![ x = 0 ]\!]x_1 \cup [\![ x = x + 2 ]\!]x_4 \cup [\![ x = x + 10 ]\!]x_5 \\
+    x_3 & = [\![ x < 100 ]\!]x_2 \\
+    x_4 & = [\![ x < 50 ]\!]x_3 \\
+    x_5 & = [\![ x \geq 50 ]\!]x_3 \\
+    x_6 & = [\![ x \geq 100 ]\!]x_2 \\
+\end{aligned}
+\]
+\end{esempio}
+
+\subsection{Sistemi di Equazioni e punto Fisso}
+
+Dato un CFG con $m$ nodi si vorrebbe procedere alla risoluzione di un sistema
+di equazioni.
+
+\begin{definizione}{Sistema di Equazioni Semantiche}{semantic_equations}
+Il sistema è definito come:
+\[ F = \{ x_i = f_i(x_1, \dots, x_m) \mid i = 1, \dots, m \} \]
+dove ogni $x_i$ rappresenta lo stato (o la proprietà) associata al nodo $i$.
+\end{definizione}
+
+L'obiettivo è calcolare la soluzione minima del sistema $F$ (\Cref{def:semantic_equations}),
+che corrisponde al limite di un'iterazione di Kleene sul reticolo del dominio:
+$\langle \wp(\mathbb{Z}), \subseteq, \emptyset, \mathbb{Z}, \cup, \cap \rangle$.
+
+\begin{nota}{Punto fisso sul dominio concreto}{concrete_fixed_point}
+Calcolare il least fixpoint (lfp) sul dominio concreto ($\wp(\mathbb{Z})$) è
+spesso indecidibile o non computabile in tempo finito.
+\end{nota}
+
+\subsection{Approssimazione del punto fisso}
+
+Dato che molto spesso non è possibile calcolare il punto fisso sul dominio concreto,
+si introduce un dominio astratto $A$ che approssima il dominio concreto $C$.
+
+L'obiettivo è calcolare un'approssimazione corretta $\alpha(\text{lfp}(F))$
+senza dover calcolare effettivamente $\text{lfp}(F)$.
+
+Per farlo, è necessario definire un sistema di equazioni astratto $F^\#$ e
+calcolarne il suo punto fisso.
+
+\subsubsection{Soundness}
+
+Affinché l'analisi sia affidabile, la funzione astratta $f^\#$ deve
+essere una sound abstraction della funzione concreta $f$.
+
+
+\begin{definizione}{Soundness della funzione astratta}{abstract_soundness}
+
+Siano $C$ e $A$ due domini legati da una connessione di Galois $(\alpha, \gamma)$
+e siano $f: C \to C$ una funzione concreta e $f^\#: A \to A$ una funzione astratta.
+Allora, $f^\#$ è una sound abstraction di $f$
+\[ \forall c \in C . \alpha(f(c)) \sqsubseteq_A f^\#(\alpha(c)) \]
+Oppure equivalentemente:
+\[ \forall a \in A . f(\gamma(a)) \sqsubseteq_C \gamma(f^\#(a)) \]
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/th_08/02.png}
+    \caption{L'immagine illustra la soundness della funzione astratta.}
+    \label{fig:th_08_02}
+\end{figure}
+
+\end{definizione}
+
+\begin{nota}{Best correct approximation (BCA)}{bca}
+Tra tutte le possibili funzioni astratte corrette, esiste la ``migliore''
+(la più precisa), definita come:
+\[ f^{bca} = \alpha \circ f \circ \gamma \]
+Tuttavia, spesso la BCA non è computabile perché richiede l'applicazione di
+$f$ e $\alpha$, operazioni che potrebbero essere troppo complesse.
+\end{nota}
+
+\subsection{Teoremi di trasferimento del punto fisso}
+
+Una volta definito il sistema astratto $F^\#$, esistono due teoremi che
+garantiscono che il suo punto fisso $lfp(F^\#)$ approssimi correttamente il punto
+fisso concreto $lfp(F)$.
+
+\begin{nota}{Approssimazione e esattezza}{approximation_exactness}
+
+$lfp(F^\#)$ è una approssimazione soudn di $lfp(F)$ se:
+\begin{itemize}
+    \item Esattezza: $\alpha(\text{lfp}(F)) = \text{lfp}(F^\#)$
+    \item Approssimazione: $\alpha(\text{lfp}(F)) \sqsubseteq \text{lfp}(F^\#)$
+\end{itemize}
+
+\end{nota}
+
+\begin{teorema}{Approssimazione di Kleene}{kleene_approx}
+
+Se $f: C \to C$ è continua su un reticolo completo concreto $\langle C, \sqsubseteq_C, \bot_C, \top_C, \sqcup_C, \sqcap_C \rangle$
+e $f^\#: A \to A$ è un'astrazione sound di $f$ su un dominio astratto
+$\langle A, \sqsubseteq_A, \bot_A, \top_A, \sqcup_A, \sqcap_A \rangle$, e se
+la sequenza $\{f^\#_i(\bot_A) \mid i \in \mathbb{N} \}$ ha un limite $x \in A$,
+allora è una approssimazione sound di $\text{lfp}(f) \sqsubseteq_C \gamma(x)$
+
+In particolare, ad ogni passo $i$, l'iterazione astratta $f^\#_i(\bot_A)$
+è una approssimazione sound di $f_i(\bot_C)$.
+
+\end{teorema}
+
+
+\begin{nota}{Approssimazione di Kleene}{}
+
+Questo teorema garantisce che l'iterazione di Kleene sul dominio astratto
+fornisce una approssimazione sound del punto fisso concreto.
+Tuttavia, non garantisce che l'approssimazione sia la migliore possibile
+(neanche alla convergenza).
+
+\end{nota}
+
+\begin{teorema}{Approssimazione di Tarski}{tarski_approx}
+
+Dato un reticolo completo $\langle C, \sqsubseteq_C, \bot_C, \top_C, \sqcup_C, \sqcap_C \rangle$
+e una funzione monotona $f: C \to C$, e una sua astrazione sound $f^\#: A \to A$
+in un dominio astratto $\langle A, \sqsubseteq_A, \bot_A, \top_A, \sqcup_A, \sqcap_A \rangle$,
+allora qualsiasi \textbf{post-fixpoint} $a$ di $f^\#$ (ovvero tale che $f^\#(a) \sqsubseteq_A a$)
+è un'approssimazione sound del punto fisso concreto $lfp(f)$, ovvero:
+\[ \text{lfp}(f) \sqsubseteq_C \gamma(a) \]
+
+\end{teorema}
+\begin{nota}{Approssimazione di Tarski}{}
+
+Il teorema di approssimazione di Tarski garantisce che qualsiasi
+post-fixpoint della funzione astratta è una approssimazione sound del
+punto fisso concreto.
+
+\end{nota}

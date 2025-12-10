@@ -1,0 +1,156 @@
+\section{Ottimizzazione dell'Analisi: l'operatore split}
+
+Questa sezione approfondisce una tecnica per accelerare l'analisi statica
+riducendo la ridondanza nelle operazioni di filtraggio sui domini astratti
+
+\subsection{Filter operator e problemi associati}
+
+Nell'interpretazione astratta classica, la gestione del flusso di controllo
+condizionale (es. \texttt{if (cond) \ldots else \ldots}) viene gestita tramite
+l'operatore di \textbf{filtro}
+
+\begin{definizione}{Filter operator}{std_filter}
+L'operatore di filtro è definito come una funzione:
+
+\[ filter: \mathbb{A} \times Pred \rightarrow \mathbb{A} \]
+dove $\mathbb{A}$ è il dominio astratto e $Pred$ è un predicato (condizione).
+
+\end{definizione}
+
+\begin{nota}{Utilizzo dell'operatore di filtro}{filter_usage}
+
+L'operatore di filtro (\Cref{def:std_filter}) viene utilizzato per modellare il
+flusso di controllo, raffinando lo stato astratto in base alla condizione
+incontrata (es. $i < 50$ nel ramo \textit{then} e $i \ge 50$ nel ramo
+\textit{else}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_09/01.png}
+    \caption{L'immagine illustra l'uso dell'operatore di filtro per gestire
+    un ramo condizionale in un CFG. Lo stato astratto $A$ viene filtrato in
+    due stati distinti in base alla condizione $c$ e alla sua negazione
+    $\neg c$.}
+    \label{fig:th_09_01}
+\end{figure}
+
+\end{nota}
+
+L'approccio tradizionale presenta delle inefficienze strutturali:
+\begin{enumerate}
+    \item \textbf{Duplicazione del lavoro}: Per gestire un ramo condizionale,
+    è necessario invocare l'operatore due volte, una per la condizione positiva
+    ($filter(A, c)$) e una per la negazione ($filter(A, \neg c)$).
+    \item \textbf{Overhead di memoria}: Spesso richiede la copia preliminare
+    dello stato astratto $A$ per preservarlo per la seconda invocazione.
+\end{enumerate}
+
+\subsection{Split operator}
+
+Per risolvere le inefficienze del filtro standard, viene introdotto l'operatore
+\textbf{split}.
+
+\begin{definizione}{Split operator}{split_operator}
+L'operatore split combina le due operazioni di filtraggio in un'unica
+invocazione atomica:
+\[
+split: \mathbb{A} \times Pred \rightarrow \mathbb{A} \times \mathbb{A}
+\]
+
+L'operatore prende in input uno stato astratto e un predicato, e restituisce
+una coppia di stati astratti. Uno soddisfa il predicato ($P_{then}$) e uno
+che soddisfa il suo complemento ($P_{else}$).
+\end{definizione}
+
+\begin{nota}{Vantaggi del Split}{split_advantages}
+L'utilizzo dell'operatore split permette di:
+\begin{itemize}
+    \item Eliminare il lavoro replicato processando il vincolo e il suo
+    opposto contemporaneamente.
+    \item Ridurre gli overhead evitando copie esplicite dello stato astratto
+    prima dell'operazione, delegando la gestione della memoria alla libreria
+    del dominio sottostante.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/th_09/02.png}
+    \caption{L'immagine illustra l'uso dell'operatore di split per gestire
+    un ramo condizionale in un CFG. Lo stato astratto $A$ viene processato
+    una sola volta per produrre due stati distinti: $P_{then}$ che soddisfa la
+    condizione $c$ e $P_{else}$ che soddisfa la negazione $\neg c$.}
+    \label{fig:th_09_02}
+\end{figure}
+
+\end{nota}
+
+
+\subsection{Implementazione e Integrazione}
+
+L'operatore è stato implementato all'interno della libreria per poliedri PPLite
+e integrato nel framework di analisi statica Crab.
+
+\subsubsection{Modifiche al CFG}
+L'integrazione richiede una modifica strutturale al Control Flow Graph (CFG)
+analizzato.
+Mentre un CFG standard utilizza archi annotati con \textit{assume} (o guardie)
+uscenti da un blocco condizionale, la versione ottimizzata introduce uno
+statement esplicito \texttt{split}.
+
+\begin{itemize}
+    \item \textbf{Standard CFG}: Archi separati con $assume(cond)$ e
+    $assume(\neg cond)$.
+    \item \textbf{Split CFG}: Un singolo nodo contenente l'istruzione
+    $split(cond)$, che propaga internamente i due stati risultanti ai
+    successori.
+\end{itemize}
+
+\begin{esempio}{Modifica del CFG con Split}{cfg_split_example}
+Prendendo in considerazione il seguente frammento di codice:
+\begin{verbatim}
+    void foo() {
+        int i = 0;
+        while (i < 50) {
+            i = bar(i);
+        }
+    }
+\end{verbatim}
+Da questo si possono ottenere i CFG rappresentati in \ref{fig:th_09_03}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/th_09/03.png}
+    \caption{L'immagine illustra la differenza tra un CFG standard (a sinistra) e
+    un CFG ottimizzato con l'operatore split (a destra) per il frammento di codice
+    fornito. Nel CFG standard, il nodo condizionale genera due archi distinti con
+    $assume(i < 50)$ e $assume(i \ge 50)$. Nel CFG con split, un singolo nodo
+    esegue l'operazione $split(i < 50)$, propagando i due stati risultanti
+    ai successori.}
+    \label{fig:th_09_03}
+\end{figure}
+\end{esempio}
+
+\subsection{Valutazione Sperimentale}
+
+L'approccio è stato valutato su benchmark reali provenienti da progetti
+differenti.
+I test hanno mostrato miglioramenti significativi in termini di tempo di
+analisi (\ref{fig:th_09_04}) e utilizzo della memoria (\ref{fig:th_09_05}),
+senza compromettere la precisione dei risultati.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{images/th_09/04.png}
+    \caption{L'immagine illustra i risultati sperimentali in termini di tempo.}
+    \label{fig:th_09_04}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/th_09/05.png}
+    \caption{L'immagine illustra i risultati sperimentali in termini di
+    utilizzo della memoria e numero di nodi del CFG.}
+    \label{fig:th_09_05}
+\end{figure}

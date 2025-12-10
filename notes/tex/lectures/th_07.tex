@@ -1,0 +1,221 @@
+\section{Galois connections}
+
+\subsection{Dominio concreto}
+
+Il dominio concreto $C$ rappresenta l'universo dei valori reali che il
+programma può assumere.
+In questo caso viene considerato il dominio concreto come l'insieme delle parti
+dell'insieme dei numeri interi.
+
+\begin{definizione}{Lattice del Dominio Concreto}{concrete_domain_lattice}
+Il dominio concreto $\langle \wp(\mathbb{Z}), \subseteq, \cap, \cup, \mathbb{Z}, \emptyset \rangle$
+forma un reticolo completo (\Cref{def:complete_lattice}), dove:
+\begin{itemize}
+    \item L'ordine parziale è l'inclusione insiemistica ($\subseteq$).
+    \item $S_1 \subset S_2$ indica che $S_1$ è ``più preciso'' di $S_2$.
+    \item $S_1 \nsubseteq S_2 \land S_2 \nsubseteq S_1$ indica che $S_1$ e
+    $S_2$ non sono comparabili.
+    \item Il join ($\cup$) rappresenta l'unione (o ``incertezza''), $x$ deve
+    essere in $S_1$ oppure in $S_2$.
+    \item Il meet ($\cap$) rappresenta l'intersezione, $x$ deve essere in
+    $S_1$ e in $S_2$.
+    \item Il Top ($\top = \mathbb{Z}$) rappresenta ``qualsiasi valore''
+    (massima incertezza, es. gli input esterni).
+    \item Il Bottom ($\bot = \emptyset$) rappresenta ``nessun valore''
+    (codice irraggiungibile).
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\textwidth]{images/th_07/01.png}
+    \caption{L'immagine illustra il reticolo completo del dominio concreto.}
+    \label{fig:th_07_01}
+\end{figure}
+
+\end{definizione}
+
+\subsubsection{Dominio astratto}
+Il dominio astratto $A$ traccia un tipo specifico di informazione
+(es. segni, intervalli, parità).
+Esiste una relazione formale tra un dominio concreto $C$ e un dominio astratto
+$A$ mediata da due funzioni:
+\begin{itemize}
+    \item Funzione di astrazione $\alpha: C \rightarrow A$: mappa un insieme
+    di valori concreti nel corrispondente valore astratto.
+    \item Funzione di concretizzazione $\gamma: A \rightarrow C$: mappa un
+    valore astratto nell'insieme di valori concreti che esso rappresenta.
+\end{itemize}
+
+\begin{nota}{Gerarchie tra domini}{}
+I domini astratti possono essere organizzati in una gerarchia e possono essere
+combinati per formare domini più complessi.
+Questi argomenti verranno trattati in seguito.
+\end{nota}
+
+\subsection{Intuizione sulla soundness dei domini astratti}
+
+Affinché un dominio astratto sia corretto (sound), il passaggio tra
+concreto e astratto deve preservare la correttezza dell'informazione.
+
+Partendo da un valore concreto $c \in C$:
+\begin{enumerate}
+    \item L'astrazione: $a = \alpha(c)$.
+    \item La concretizzazione: $c' = \gamma(a) = \gamma(\alpha(c))$.
+\end{enumerate}
+Per avere soundness, il risultato $c'$ deve essere una sovra-approssimazione
+(o uguale) del valore di partenza $c$.
+Ovvero, nel processo di astrazione si può perdere precisione (ottenere
+un insieme più grande), ma non si possono perdere valori originali.
+
+Analogamente, partendo da un valore astratto $a \in A$:
+\begin{enumerate}
+    \item La concretizzazione: $c = \gamma(a)$.
+    \item La ri-astrazione: $a' = \alpha(c) = \alpha(\gamma(a))$.
+\end{enumerate}
+Il risultato $a'$ deve essere più preciso (o uguale) rispetto ad
+$a$ ($a' \sqsubseteq_A a$). Concretizzare non perde informazione, quindi
+ri-astrarre dovrebbe restituire qualcosa di idealmente identico o migliore.
+
+\subsection{Monotonia}
+
+Le funzioni $\alpha$ e $\gamma$ devono essere monotone (devono preservare
+l'ordine).
+
+\begin{teorema}{Monotonia di $\alpha$}{alpha_monotonicity}
+$\alpha$ è monotona: $c_1 \subseteq c_2 \Rightarrow \alpha(c_1) \sqsubseteq_A \alpha(c_2)$.
+
+Se si astrae qualcosa che rappresenta meno informazione (insieme più piccolo),
+si ottiene un elemento astratto con meno o uguale informazione.
+\end{teorema}
+
+\begin{teorema}{Monotonia di $\gamma$}{gamma_monotonicity}
+$\gamma$ è monotona: $a_1 \sqsubseteq_A a_2 \Rightarrow \gamma(a_1) \subseteq \gamma(a_2)$.
+
+Se si concretizza qualcosa di più preciso, si ottiene un insieme concreto
+più piccolo.
+\end{teorema}
+
+\subsection{Galois Connection}
+
+La Galois Connection (connessione di Galois) è la formalizzazione algebrica
+che lega dominio concreto e astratto garantendo le proprietà di soundness e
+best abstraction.
+
+\begin{definizione}{Galois Connection}{galois_connection}
+Siano $\langle C, \sqsubseteq_C \rangle$ e $\langle A, \sqsubseteq_A \rangle$
+due posets. Due funzioni monotone $\alpha: C \rightarrow A$ e
+$\gamma: A \rightarrow C$ formano una Galois Connection se soddisfano le
+seguienti proprietà:
+\begin{itemize}
+\item $\gamma \circ \alpha$ è estensiva: $\forall c \in C . c \subseteq_C \gamma(\alpha(c))$.
+\item $\alpha \circ \gamma$ è riduttiva: $\forall a \in A . \alpha(\gamma(a)) \sqsubseteq_A a$.
+\end{itemize}
+\end{definizione}
+
+\begin{nota}{Interpretazione delle proprietà di GC}{gc_interpretation}
+Le proprietà di estensività e riduttività garantiscono che:
+\begin{itemize}
+    \item Quando si astrae e poi concretizza ($\gamma \circ \alpha$), si
+    ottiene una sovra-approssimazione del valore originale (perdita di
+    precisione).
+    \item Quando si concretizza e poi si astrae, si ottiene un valore astratto
+    più preciso o uguale (nessuna perdita di informazione).
+\end{itemize}
+\end{nota}
+
+
+\subsection{Galois insertion (GI)}
+
+Una Galois Connection (\Cref{def:galois_connection}) può contenere elementi
+nell'astratto che sono ridondanti (più elementi astratti rappresentano lo
+stesso oggetto concreto)
+Quando viene rimossa questa ridondanza, si ottiene una Galois Insertion
+(Intersezione di Galois).
+
+\begin{definizione}{Galois Insertion}{galois_insertion}
+
+    Siano $\langle C, \sqsubseteq_C \rangle$ e $\langle A, \sqsubseteq_A \rangle$
+due posets e $\alpha: C \rightarrow A$ e $\gamma: A \rightarrow C$ due funzioni
+monotone. Supponendo che esse formino una Galois Connection
+(\Cref{def:galois_connection}) tra $C$ e $A$, se $\alpha \circ \gamma$ è
+l'identità su $A$ questa si chiama Galois Insertion.
+
+\end{definizione}
+
+\begin{nota}{Riduzione da GC a GI}{gc_to_gi}
+Ogni GC può essere ridotta a una GI rimuovendo gli elementi ridondanti
+dal dominio astratto (domain reduction).
+Se non si ha una GI, significa che esistono almeno due elementi astratti che
+rappresentano la stessa informazione concreta.
+\end{nota}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \node[draw] (C) at (0,0) {Concreto};
+        \node[draw] (A) at (4,0) {Astratto};
+        \draw[->, bend left] (C) to node[above] {$\alpha$} (A);
+        \draw[->, bend left] (A) to node[below] {$\gamma$} (C);
+        \node[below=1cm of C, align=center, font=\small] {GC generica:\\$\alpha(\gamma(a)) \sqsubseteq a$};
+        \node[below=1cm of A, align=center, font=\small] {GI:\\$\alpha(\gamma(a)) = a$};
+    \end{tikzpicture}
+    \caption{Relazione tra domini in una GC e in una GI.}
+    \label{fig:gc_vs_gi}
+\end{figure}
+
+\subsection{Best abstraction}
+
+Siano $\langle C, \subseteq_C \rangle$ e $\langle A, \sqsubseteq_A \rangle$
+due posets, e $\alpha: C \rightarrow A$ e $\gamma: A \rightarrow C$ due
+funzioni monotone. Queste formano una Connessione di Galois, se:
+\[
+\forall c \in C, \forall a \in A . \alpha(c) \sqsubseteq_A a \iff c \sqsubseteq_C \gamma(a)
+\]
+dove:
+\begin{itemize}
+    \item $\alpha(c) \sqsubseteq_A a \implies c \sqsubseteq_C \gamma(a)$ assicura
+    la soundess
+    \item $c \sqsubseteq_C \gamma(a) \implies \alpha(c) \sqsubseteq_A a$ assicura
+    la best abstraction.
+\end{itemize}
+
+\subsubsection{Problema della best abstraction}
+Non sempre esiste una Galois Connection tra un dominio concreto e un
+dominio astratto arbitrario.
+
+\begin{esempio}{Poliedri convessi e cerchi}{convex_polyhedra_circle}
+Considerando l'insieme $P = \{(x,y) | x^2 + y^2 \le 1\}$ (un cerchio).
+Se il dominio astratto è quello dei poliedri convessi ($a \cdot x + b \cdot y \le c$),
+non esiste la best abstraction per il cerchio.
+
+È approssimare il cerchio con un quadrato, un ottagono, un dodecagono, etc.,
+ma è sempre possibile trovare un poliedro con più lati che approssima il
+cerchio meglio del precedente senza mai coincidere con il cerchio stesso.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\textwidth]{images/th_07/02.png}
+    \caption{L'immagine illustra l'approssimazione di un cerchio con poliedri
+    convessi.}
+    \label{fig:th_07_02}
+\end{figure}
+
+Mancando un elemento minimo nell'astratto che sovra-approssima il cerchio,
+non è possibile definire $\alpha(P)$ in modo unico come richiesto dalla
+definizione di Galois Connection (\Cref{def:galois_connection}).
+\end{esempio}
+
+\subsection{Estensione agli stati}
+
+Finora si è parlato di astrazione di valori (es. un intero).
+Ma le analisi lavorano su stati ($\Sigma: \text{Var} \to \text{Valori}$).
+
+\begin{proposizione}{Astrazione pointwise}{pointwise_abstraction}
+
+Se esiste una GC tra i valori concreti e i valori astratti, allora
+l'applicazione puntuale (pointwise) di questa astrazione agli stati
+forma anch'essa una Connessione di Galois.
+
+Questo permette di costruire l'analisi componendo le astrazioni delle singole
+variabili.
+\end{proposizione}

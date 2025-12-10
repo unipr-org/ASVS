@@ -1,0 +1,207 @@
+\section{Introduzione a LiSA e architettura di un analizzatore statico}
+
+\subsection{Panoramica di un analizzatore statico}
+
+Un analizzatore statico è composto da diversi componenti modulari che
+interagiscono per trasformare il codice sorgente in un risultato di analisi
+(es. warning o garanzie di correttezza).
+
+
+\begin{definizione}{Componenti Principali}{static_analyzer_components}
+Il flusso di un analizzatore statico può essere riassunto nei seguenti
+passaggi logici:
+\begin{itemize}
+    \item \textbf{Programma}: Il codice sorgente in input.
+    \item \textbf{IR}: Il programma viene tradotto in una rappresentazione
+    interna che è più facile da analizzare.
+    \item \textbf{Engine di analisi}: Il cuore dell'analizzatore che gestisce
+    l'algoritmo di punto fisso, la risoluzione delle chiamate e la gestione
+    della memoria.
+    \item \textbf{Dominio}: L'astrazione dei dati su cui lavora l'algoritmo
+    (es. propagazione delle costanti, intervalli).
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{images/th_05/01.png}
+  \caption{L'immagine illustra i componenti principali di un analizzatore
+  statico.}
+  \label{fig:th_05_01}
+\end{figure}
+\end{definizione}
+
+\begin{nota}{Modularità}{modularity_lisa}
+Una domanda fondamentale nella progettazione di un analizzatore è:
+``Come cambiare l'analisi o il linguaggio senza riscrivere tutto?''.
+La risposta risiede nell'indipendenza dei componenti:
+\begin{itemize}
+    \item I componenti dell'analisi devono essere indipendenti l'uno
+    dall'altro.
+    \item I componenti dell'analisi e la IR non devono essere modellati su
+    uno specifico linguaggio sorgente.
+\end{itemize}
+Questo permette, ad esempio, di cambiare il dominio astratto (da costanti a
+intervalli) senza modificare l'algoritmo di visita.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{images/th_05/02.png}
+  \caption{L'immagine illustra una possibile scomposizione modulare di un
+  analizzatore statico.}
+  \label{fig:th_05_02}
+\end{figure}
+
+\end{nota}
+
+\subsection{LiSA}
+
+LiSA (Library for Static Analysis) è una libreria open-source scritta in Java
+per la realizzazione di analizzatori statici basati su interpretazione astratta.
+
+\subsubsection{Overview}
+In LiSA, il codice sorgente viene tradotto da un front-end specifico per il
+linguaggio (es. per Java o IMP) in una collezione di control flow graph.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/th_05/03.png}
+  \caption{L'immagine illustra il flusso di analisi in LiSA.}
+  \label{fig:th_05_03}
+\end{figure}
+
+
+\begin{definizione}{Struttura di un CFG in LiSA}{lisa_cfg}
+
+Un CFG in LiSA è costituito da:
+\begin{itemize}
+    \item Un insieme di nodi, che rappresentano gli statement del programma.
+    \item Un insieme di archi che collegano i nodi.
+\end{itemize}
+
+Gli archi possono essere di tre tipi:
+\begin{itemize}
+    \item \textbf{Sequential edge:} Flusso di esecuzione sequenziale standard.
+    \item \textbf{True edge:} Preso quando la condizione del nodo sorgente è
+    valutata come vera (assumed to hold).
+    \item \textbf{False edge:} Preso quando la condizione del nodo sorgente è
+    valutata come falsa (assumed not to hold).
+\end{itemize}
+
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/th_05/04.png}
+  \caption{L'immagine illustra la struttura di un CFG in LiSA.}
+  \label{fig:th_05_04}
+\end{figure}
+
+\end{definizione}
+
+
+L'utilizzo dei CFG permette di astrarre dalla sintassi specifica del controllo
+di flusso del linguaggio originale (es. cicli while, for, if) e definire
+algoritmi di punto fisso direttamente sul grafo.
+
+\subsection{Sintassi vs Semantica}
+
+Un concetto chiave in LiSA è la distinzione tra lo statement sintattico
+(il nodo del CFG) e il suo significato semantico.
+
+\begin{nota}{Il problema della sintassi}{syntax_problem}
+Uno statement potrebbe essere complesso e avere diverse rappresentazioni
+sintattiche equivalenti oppure diverse operazioni sintattiche
+possono avere la stessa semantica. Ad esempio, in Java, \texttt{``a'' + ``b''}
+e \texttt{``a''.concat (``b'')} eseguono entrambi una concatenazione di
+stringhe.
+
+Un dominio astratto non dovrebbe preoccuparsi di come l'operazione è
+scritta sintatticamente.
+\end{nota}
+
+Per risolvere questo problema, LiSA utilizza un linguaggio interno di
+\textbf{symbolic expressions}. Così facendo:
+\begin{itemize}
+    \item I domini lavorano su espressioni simboliche, non sugli
+    statement grezzi.
+    \item Ogni espressione simbolica rappresenta un'operazione semantica
+    ``atomica'' (es. somma aritmetica, concatenazione stringhe).
+    \item Durante il calcolo del punto fisso, il metodo
+    \texttt{Statement.semantics ()} riscrive lo statement in una o più
+    espressioni simboliche da passare al dominio.
+\end{itemize}
+
+\begin{esempio}{Rewriting semantico}{semantic_rewriting}
+Consideriamo un operatore \texttt{Plus} generico. La sua semantica potrebbe
+essere definita come:
+\begin{itemize}
+    \item Se gli operandi sono stringhe $\rightarrow$ ritorna una
+    \texttt{StringConcat}.
+    \item Altrimenti $\rightarrow$ ritorna una \texttt{ArithmSum}.
+\end{itemize}
+Il dominio astratto implementerà poi la logica specifica per
+\texttt{StringConcat} o \texttt{ArithmSum}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/th_05/05.png}
+  \caption{L'immagine illustra lo pseudocodice dell'operatore \texttt{Plus}.}
+  \label{fig:th_05_05}
+\end{figure}
+
+\end{esempio}
+
+\subsection{Implementazione dell'analisi dataflow}
+
+LiSA fornisce un'architettura specifica per implementare le analisi dataflow
+(Vedi \ref{subsec:dataflow_analysis}).
+
+\begin{definizione}{Dataflow in LiSA}{lisa_dataflow}
+Le analisi dataflow in LiSA sfruttano l'algoritmo di punto fisso generico
+basato su worklist.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/th_05/06.png}
+    \caption{L'immagine illustra l'algoritmo di punto fisso generico basato
+    su worklist per l'analisi dataflow forward, evidenziando in rosso i
+    componenti che variano in base alla semantica dell'analisi (May vs Must)
+    e che necessitano di essere modularizzati.}
+  \label{fig:th_05_06}
+\end{figure}
+
+L'implementazione è divisa in due classi principali per separare la gestione
+del reticolo dalla logica di trasferimento:
+
+\begin{itemize}
+    \item \textbf{DataflowDomain}: Gestisce la logica generale del dominio,
+    inclusa la valutazione delle espressioni e degli assegnamenti.
+    Esistono due specializzazioni principali basate sul tipo di join:
+    \begin{itemize}
+        \item \textbf{PossibleForwardDataflowDomain} che implementa un'analisi
+        \textit{May} (possibile). L'operazione di \texttt{lub} (join) è
+        l'unione degli insiemi.
+        \item \textbf{DefiniteForwardDataflowDomain} che implementa un'analisi
+        \textit{Must} (definita). L'operazione di \texttt{lub} (join) è
+        l'intersezione degli insiemi.
+    \end{itemize}
+    
+    \item \textbf{DataflowElement}: Rappresenta il singolo elemento tracciato
+    dal dominio. Questa classe definisce le operazioni specifiche di
+    \textbf{gen} e \textbf{kill}.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{images/th_05/07.png}
+  \caption{L'immagine illustra lo schema delle classi per l'analisi dataflow
+  in LiSA.}
+  \label{fig:th_05_07}
+\end{figure}
+
+\end{definizione}
+
+\begin{nota}{Tipi di analisi supportate}{lisa_analysis_types}
+Attualmente, LiSA supporta esclusivamente analisi di tipo \textbf{forward}.
+Per quanto riguarda la semantica dell'analisi, sono supportate sia le
+analisi \textit{May} (possibile) che \textit{Must} (definita).
+\end{nota}

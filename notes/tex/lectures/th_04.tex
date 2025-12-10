@@ -1,0 +1,492 @@
+\section{Analisi dataflow}
+
+\subsection{CFGs}
+Nelle analisi di tipo dataflow i programmi vengono rappresentati come
+control flow graph (CFG), dove i nodi rappresentano gli statement del
+programma e gli archi rappresentano i possibili flussi di controllo tra di
+essi.
+
+\begin{esempio}{CFG di un programma semplice}{cfg_example}
+
+Si consideri il seguente programma:
+\begin{verbatim}
+1 y = a - b ;
+2 x = y + b ;
+3 while ( y > a + b )
+4   y = y - x * x;
+\end{verbatim}
+
+La sua rappresentazione come CFG è la seguente:
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\textwidth]{images/th_04/01.png}
+  \caption{L'immagine illustra il CFG del programma di esempio.}
+  \label{fig:th_04_01}
+\end{figure}
+
+\end{esempio}
+
+\begin{definizione}{Struttura di un CFG}{cfg_structure}
+Dato un programma $P$, il suo control flow graph (CFG) è formato da:
+\begin{itemize}
+    \item Un insieme di nodi (blocchi) identificati da $i \in \mathbb{N}$
+    \item Un insieme di archi rappresentati come coppie $(i_1, i_2)
+    \in \mathbb{N} \times \mathbb{N}$ dove $i_1, i_2$ sono nodi del CFG.
+\end{itemize}
+Dato un CFG, è possibile definire:
+\begin{itemize}
+    \item $nodes(G)$ come l'insieme di tutti gli indici dei blocchi in $G$.
+    \item $stmt (G, i)$ lo statement associato al blocco $i$ in $G$.
+    \item $edges(G) \subseteq \mathbb{N} \times \mathbb{N}$ come l'insieme di
+    tutti gli archi in $G$.
+\end{itemize}
+\end{definizione}
+
+\subsection{Analisi di dataflow}\label{subsec:dataflow_analysis}
+
+Le analisi di dataflow sono tecniche tradizionali utilizzate principalmente
+per le ottimizzazioni nei compilatori.
+Queste analisi si basano sulla rappresentazione del programma tramite
+CFG e utilizzano un approccio formale basato su sistemi di equazioni.
+
+Le equazioni vengono costruite definendo le relazioni
+tra gli stati entranti (\textit{entry}) e uscenti (\textit{exit}) di ogni
+blocco del CFG.
+
+\begin{nota}{Scopo dell'analisi}{scopo_df}
+La proprietà di interesse è solitamente semplice e orientata a ottimizzare
+l'esecuzione a runtime (ad esempio, evitando di calcolare due volte la stessa
+espressione).
+\end{nota}
+
+\begin{nota}{Classificazione delle analisi di dataflow}{types_of_df}
+Le analisi dataflow classiche possono essere classificate secondo due
+criteri principali:
+\begin{itemize}
+    \item \textbf{Direzione del flusso}: indica se l'analisi procede
+    seguendo il flusso di controllo del programma (\textbf{forward}) o
+    contro di esso (\textbf{backward}).
+    \item \textbf{Semantica della proprietà}: indica se l'analisi
+    determina ciò che \textbf{può} accadere (\textbf{may/possible}) o ciò che
+    \textbf{deve} accadere (\textbf{must/definite}).
+\end{itemize}
+
+Il tipo di classificazione determina importanti aspetti formali:
+
+\begin{itemize}
+    \item \textbf{Forward vs Backward}:
+    \begin{itemize}
+        \item Forward: $entry(i)$ dipende da $exit(j)$ dei predecessori
+        \item Backward: $exit(i)$ dipende da $entry(j)$ dei successori
+    \end{itemize}
+    
+    \item \textbf{May vs Must}:
+    \begin{itemize}
+        \item May (possible): si utilizza l'unione ($\cup$) al join point
+        (basta che la proprietà valga lungo \emph{un} cammino)
+        \item Must (definite): si utilizza l'intersezione ($\cap$) al join point
+        (la proprietà deve valere lungo \emph{tutti} i cammini)
+    \end{itemize}
+\end{itemize}
+
+Queste caratteristiche determinano la struttura del reticolo e l'operatore
+di join utilizzato nell'analisi.
+
+\end{nota}
+
+\subsubsection{Available expressions}
+
+\begin{definizione}{Available expressions}{available_expressions}
+``For each program point, which expressions must have already
+been computed, and not later modified, on all paths to the program
+point''
+
+Formalmente un'espressione $e$ è disponibile in un punto del programma $p$ se
+e solo se $e$ è stata calcolata lungo ogni cammino che porta a $p$ e nessuna
+delle variabili che occorrono in $e$ è stata ridefinita dopo il calcolo di $e$.
+\end{definizione}
+
+\begin{nota}{Obiettivi dell'analisi}{ae_objectives}
+Quest'analisi è un'analisi \textbf{forward} e \textbf{must} che ha come
+obiettivi principali:
+\begin{itemize}
+    \item Eliminazione di sottoespressioni comuni (Common Subexpression
+    Elimination): evitare di ricalcolare espressioni il cui valore è già
+    disponibile.
+    \item Allocazione ottimale dei registri: memorizzare le espressioni più
+    frequentemente utilizzate in registri temporanei.
+\end{itemize}
+\end{nota}
+
+\paragraph{Dominio dell'analisi}
+
+Sia $AE$ l'insieme di tutte le espressioni aritmetiche non banali che
+compaiono nel programma. Lo stato dell'analisi in ogni punto del programma è
+un elemento di $\wp(AE)$, ovvero un sottoinsieme delle espressioni
+aritmetiche.
+
+\begin{definizione}{Funzioni ausiliarie}{ae_auxiliary_functions}
+È possibile definire le seguenti funzioni ausiliarie:
+\begin{itemize}
+    \item $AExp : \textit{Expr} \to \wp(AE)$ restituisce l'insieme
+    delle espressioni aritmetiche non banali contenute in un'espressione $e$.
+    \item $AExpB : \textit{BExpr} \to \wp(AE)$ restituisce l'insieme
+    delle espressioni aritmetiche non banali contenute in un'espressione
+    booleana $b$.
+    \item $FV : AE \to \wp(\textit{Var})$ restituisce l'insieme delle
+    variabili libere (free variables) che occorrono in un'espressione $a$.
+\end{itemize}
+\end{definizione}
+
+\paragraph{Funzioni di trasferimento}
+
+Per ogni statement del programma, è necessario definire le funzioni $gen$ e
+$kill$ che descrivono come lo statement modifica l'insieme delle espressioni
+disponibili.
+
+\begin{definizione}{Gen e Kill}{ae_gen_kill}
+Considerando un assegnamento $x := e$, dove $x$ è una variabile ed $e$
+un'espressione.
+\begin{itemize}
+    \item \textbf{Killed}: Quando $x$ viene assegnata, tutte le espressioni
+    che contengono $x$ non sono più valide (vengono ``uccise'') perché il
+    valore di $x$ è cambiato.
+    \[ kill(x := e) = \{ a \in AE \mid x \in FV(a) \} \]
+    Dove $FV(a)$ è l'insieme delle variabili libere in $a$.
+    
+    \item \textbf{Gen}: Quando $x$ viene assegnata, l'espressione
+    $e$ calcolata diventa disponibile, a condizione che $x$ non compaia
+    nell'espressione stessa (altrimenti il valore appena calcolato verrebbe
+    subito invalidato dall'assegnamento stesso).
+    \[ gen(x := e) = \{ a \in AE \mid x \notin FV(a) \} \]
+\end{itemize}
+\end{definizione}
+
+\paragraph{Equazioni di flusso}
+
+Per ogni blocco $i \in nodes(G)$ del CFG, si definisce lo stato entrante
+$entry(i)$ e lo stato uscente $exit(i)$.
+
+\begin{definizione}{Stato entrante}{ae_entry}
+Lo stato entrante di un blocco $i$ è dato dall'intersezione degli stati
+uscenti di tutti i suoi predecessori:
+\[
+entry(i) = \bigcap \{exit(j) \mid (j, i) \in edges(G)\}
+\]
+la scelta dell'intersezione ($\cap$) è determinata dalla natura \textbf{must}
+dell'analisi: un'espressione è disponibile solo se è disponibile lungo tutti
+i cammini che raggiungono il blocco.
+
+\end{definizione}
+
+\begin {nota}{Blocco iniziale}{ae_entry_initial}
+Se $i$ non ha predecessori (blocco iniziale), allora $entry(i) = \emptyset$.
+\end{nota}
+
+\begin{definizione}{Stato uscente}{ae_exit}
+Lo stato uscente di un blocco $i$ è calcolato applicando la funzione di
+trasferimento allo stato entrante:
+\[
+exit(i) = (entry(i) \setminus kill(stmt(G, i))) \cup gen(stmt(G, i))
+\]
+
+Ovvero:
+\begin{enumerate}
+    \item Si parte dalle espressioni disponibili in ingresso: $entry(i)$
+    \item Si rimuovono le espressioni invalidate: $\setminus kill(stmt(G, i))$
+    \item Si aggiungono le espressioni generate: $\cup gen(stmt(G, i))$
+\end{enumerate}
+\end{definizione}
+
+
+Da queste funzioni è possibile riscrivere le funzioni $gen$ e $kill$ in modo
+più generale:
+\begin{itemize}
+    \item $kill(x := \texttt{e}) = \{ a \in AE \mid x \in FV(\texttt{a}) \}$
+    \item $gen(x := \texttt{e}) = \{ a \in AE \mid x \notin FV(\texttt{a}) \}$
+\end{itemize}
+
+\begin{definizione}{Funzione di Trasferimento}{transfer_function}
+In un'analisi dataflow, una funzione di trasferimento $f_i$ è una funzione
+matematica associata a ciascun blocco (o istruzione) $i$ del CFG che descrive
+come l'esecuzione di quel blocco trasforma lo stato dell'analisi.
+
+Formalmente, dato un reticolo completo $L$ che rappresenta il dominio
+dell'analisi, la funzione di trasferimento mappa lo stato in ingresso
+nello stato in uscita:
+\[ f_i : L \to L \]
+\[ exit(i) = f_i(entry(i)) \]
+
+Nelle analisi dataflow classiche (es. available
+expressions), la funzione di trasferimento assume tipicamente la forma:
+\[ f_i(x) = (x \setminus kill_i) \cup gen_i \]
+dove:
+\begin{itemize}
+    \item $x$ è lo stato in ingresso ($entry(i)$).
+    \item $kill_i$ è l'insieme degli elementi invalidati dall'istruzione $i$.
+    \item $gen_i$ è l'insieme degli elementi generati dall'istruzione $i$.
+\end{itemize}
+\end{definizione}
+
+\begin{nota}{Monotonia}{monotonicity}
+Affinché l'algoritmo iterativo (worklist) converga sicuramente a un punto
+fisso (terminazione), è richiesto che le funzioni di trasferimento siano
+monotone rispetto all'ordinamento del reticolo $\sqsubseteq$.
+Ovvero:
+\[ x \sqsubseteq y \implies f(x) \sqsubseteq f(y) \]
+Le funzioni basate su $gen$ e $kill$ soddisfano sempre questa proprietà.
+\end{nota}
+
+\subsubsection{Altre analisi di dataflow}
+
+Come accennato nella nota (\Cref{nt:types_of_df}), le analisi di dataflow
+possono essere classificate secondo vari criteri.
+In aggiunta all'analisi delle available expressions, esistono numerose altre
+analisi di dataflow utilizzate per diversi scopi nell'ottimizzazione del
+codice. Alcuni esempi di altre analisi viste nel corso di Linguaggi e Compilatori di dataflow includono:
+\begin{itemize}
+    \item \textbf{Live variables}
+    \item \textbf{Reaching definitions}
+    \item \textbf{Very busy expressions}
+\end{itemize}
+L'immagine seguente classifica alcune di queste analisi in base alla direzione del
+flusso e alla semantica della proprietà
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{images/th_04/02.png}
+  \caption{L'immagine illustra la classificazione di alcune analisi di dataflow.}
+  \label{fig:th_04_02}
+\end{figure}
+
+\begin{definizione}{Reaching definitions}{reaching_definitions}
+``For each program point, which assignments may have been made and not
+overwritten, when program execution reaches this point along some path''
+
+Un'assegnazione $d: x := e$ al blocco $i$ raggiunge (reaches) un punto del
+programma $p$ se esiste almeno un cammino dal blocco $i$ al punto $p$ lungo
+il quale la variabile $x$ non viene ridefinita.
+
+Quest'analisi è di tipo \textbf{forward} e \textbf{may}; l'informazione
+si propaga in avanti nel CFG ed è sufficiente che un'assegnazione raggiunga
+il punto lungo almeno un cammino.
+\end{definizione}
+
+\begin{definizione}{Live variables}{live_variables}
+``For each program point, which variables may be live at the exit from the
+program point. A variable is live if its content will be read in some path
+starting from the program point''
+
+Una variabile $x$ è viva (live) in un punto del programma $p$ se esiste
+almeno un cammino che parte da $p$ lungo il quale il valore di $x$ viene
+utilizzato prima di essere ridefinito.
+
+Quest'analisi è di tipo \textbf{backward} e \textbf{may}; l'informazione
+si propaga all'indietro nel CFG (dai successori ai predecessori) ed è
+sufficiente che la variabile sia utilizzata lungo almeno un cammino
+futuro.
+\end{definizione}
+
+\begin{definizione}{Very busy expressions}{very_busy_expressions}
+``For each program point, which expressions must be very busy at the exit
+from the point. An expression is very busy if it will be always used in all
+paths starting from a label before any of the variables occurring in it are
+redefined''
+
+Un'espressione $e$ è molto impegnativa (very busy) in un punto del programma
+$p$ se lungo ogni cammino che parte da $p$ l'espressione $e$ viene
+calcolata prima che qualsiasi variabile che occorre in $e$ venga ridefinita.
+
+Quest'analisi è di tipo \textbf{backward} e \textbf{must}; l'informazione
+si propaga all'indietro nel CFG e l'espressione deve essere utilizzata lungo
+tutti i cammini futuri.
+\end{definizione}
+
+\subsection{I reticoli nelle analisi di dataflow}
+
+Tutte le analisi di dataflow discusse operano su dei reticoli completi
+(\Cref{def:complete_lattice}).
+
+\begin{definizione}{Reticolo delle analisi dataflow}{df_lattices}
+Ogni analisi dataflow può essere definita come una tupla che rappresenta un
+reticolo completo (\Cref{def:complete_lattice}).
+Per le analisi viste, i reticoli sono:
+\begin{enumerate}
+    \item \textbf{Available expressions}: $\langle \wp(AE), \supseteq, \emptyset, AE, \cap, \cup \rangle$.
+    \item \textbf{Live variables}: $\langle \wp(Var), \subseteq, \emptyset, Var, \cup, \cap \rangle$.
+    \item \textbf{Reaching definitions}: $\langle \wp(Def), \subseteq, \emptyset, Def, \cup, \cap \rangle$.
+    \item \textbf{Very busy expressions}: $\langle \wp(BE), \supseteq, \emptyset, BE, \cup, \cap \rangle$.
+\end{enumerate}
+
+Affinché l'algoritmo iterativo termini sicuramente, il reticolo deve soddisfare
+la ascending chain condition (\Cref{def:acc}).
+\end{definizione}
+
+\begin{nota}{Modellazione analisi statiche}{df_modeling}
+Non tutte le analisi statiche possono essere modellate come analisi di dataflow.
+\end{nota}
+
+\subsection{Analisi distributive}
+
+Le analisi dataflow classiche appartengono alla categoria delle analisi
+distributive.
+Questa proprietà matematica è fondamentale perché garantisce che l'analisi
+possa essere risolta con algoritmi standard efficienti, ma ne limita anche la
+potenza espressiva.
+
+\begin{definizione}{Distributività}{distributivity}
+
+Sia $\langle \wp(X), \subseteq, \emptyset, X, \cup, \cap \rangle$ un
+reticolo completo (\Cref{def:complete_lattice}) e $f: \wp(X) \to \wp(X)$
+una funzione (\Cref{def:function}). $f$ si dice \textbf{distributiva} se:
+\[ f(x \cup y) = f(x) \cup f(y) \]
+per ogni $x, y \in \wp(X)$.
+
+\end{definizione}
+
+\begin{nota}{Intuizione}{distributive_analysis}
+
+Quanto descritto nella definizione sopra (\Cref{def:distributivity})
+in termini intuitivi, significa che il risultato dell'analisi è identico sia
+che si uniscano le informazioni prima di eseguire l'istruzione, sia
+che le si uniscano dopo averla eseguita su ogni singolo ramo.
+
+\end{nota}
+
+\begin{nota}{La potenza delle analisi distributive}{power_of_distributive_analyses}
+
+Le analisi distributive tengono traccia di \textbf{come} la computazione avviene
+(es. variabili che sono assegnate ed espressioni che vengono calcolate)
+all'interno del programma e non del \textbf{cosa} il programma calcola.
+
+Per questo motivo le analisi complesse non sono generalmente distributive e molto
+spesso non possono essere modellate come analisi di dataflow.
+
+\end{nota}
+
+\subsubsection{Constant propagation}
+
+Un esempio di analisi non distributiva è la constant propagation.
+
+\begin{definizione}{Constant propagation}{constant_propagation}
+``
+For each program point, whether or not a variable has a
+constant value whenever an execution reaches that point
+''
+
+Un reticolo per la constant propagation può essere definito come:
+\[
+CP = \langle \mathbb{Z} \cup \{\bot\} \cup \{\top\}, \sqsubseteq, \bot, \top, \sqcup, \sqcap \rangle
+\]
+dove $\bot$ rappresenta il valore costante di una variabile non definita,
+$\top$ rappresenta il valore non costante (variabile) e l'operatore di join
+$\sqcup$ è definito come:
+\[
+c_1 \sqcup c_2 =
+\begin{cases}
+c_1 & \text{se } c_1 = c_2 \\
+\top & \text{altrimenti}
+\end{cases}
+\]
+
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{images/th_04/03.png}
+  \caption{L'immagine illustra il reticolo per la constant propagation.}
+  \label{fig:th_04_03}
+\end{figure}
+
+\end{definizione}
+
+\begin{nota}{Non distributività della constant propagation}{cp_non_distributive}
+
+    Considerando il seguente frammento di codice:
+
+\begin{verbatim}
+if (condition) then
+    y := 1
+    z := -1
+else
+    y := 0
+    z := 0
+end if
+
+x := y + z
+\end{verbatim}
+
+Da qui è possibile costruire il seguente CFG:
+
+\begin{center}
+    \begin{tikzpicture}
+        % Nodo sinistro (Stato s0)
+        \node[align=left] (left_state) at (-2.5, 2) {
+            $y \mapsto 1$ \\
+            $z \mapsto -1$
+        };
+
+        % Nodo destro (Stato s1)
+        \node[align=left] (right_state) at (2.5, 2) {
+            $y \mapsto 0$ \\
+            $z \mapsto 0$
+        };
+
+        % Box centrale (Istruzione)
+        \node[draw, thick, minimum width=3.5cm, minimum height=1.5cm] (instruction) at (0, 0) {
+            \Large $x := y + z$
+        };
+
+        % Frecce
+        \draw[->, >=stealth] (left_state.south east) -- (instruction.130);
+        \draw[->, >=stealth] (right_state.south west) -- (instruction.50);
+    \end{tikzpicture}
+\end{center}
+
+Dal CFG sopra è possibile costruire due insiemi di stati:
+\begin{itemize}
+    \item Stato $s_0$ (nodo sinistro): $ \{ y \mapsto 1, z \mapsto -1 \} $
+    \item Stato $s_1$ (nodo destro): $ \{ y \mapsto 0, z \mapsto 0 \} $
+\end{itemize}
+
+La funzione di trasferimento al join point (l'istruzione $x := y + z$) calcola il
+nuovo stato:
+\[
+f(s_{in}) = f(s_0 \sqcup s_1)
+\]
+dove $\sqcup$ è l'operatore di join del reticolo CP.
+
+Per verificare se la constant propagation è distributiva, è necessario calcolare
+$f(s_0 \sqcup s_1)$ e confrontarlo con $f(s_0) \sqcup f(s_1)$:
+ 
+
+Prima di eseguire l'istruzione, l'analisi unisce le informazioni provenienti
+dai due rami:
+\begin{itemize}
+    \item Per $y$: $1 \sqcup 0 = \top$.
+    \item Per $z$: $-1 \sqcup 0 = \top$.
+\end{itemize}
+Quindi lo stato unito è $s_{join} = [ y \mapsto \top, z \mapsto \top ]$.
+
+
+Successivamente l'analisi valuta $x := y + z$ usando lo stato $s_{join}$:
+\[ x := \top + \top \implies x \mapsto \top \]
+Quindi $f(s_0 \sqcup s_1) = [ x \mapsto \top, y \mapsto \top, z \mapsto \top ]$,
+portando al risultato che $x$ non è costante.
+
+\medskip
+
+Tuttavia, se l'analisi fosse distributiva si dovrebbe ottenere lo stesso
+risultato unendo i risultati delle singole esecuzioni ($f(s_0) \sqcup f(s_1)$):
+
+\begin{itemize}
+    \item Nel ramo sinistro ($s_0$): $x := 1 + (-1) = 0$.
+    \item Nel ramo destro ($s_1$): $x := 0 + 0 = 0$.
+    \item Unione dei risultati: $0 \sqcup 0 = 0$.
+\end{itemize}
+
+Poiché il risultato reale dell'analisi ($\top$) è diverso e meno preciso del risultato ideale ($0$):
+\[ f(s_0 \sqcup s_1) \neq f(s_0) \sqcup f(s_1) \]
+\[ \top \neq 0 \]
+si dimostra che la propagazione delle costanti non è un'analisi distributiva.
+
+\end{nota}
